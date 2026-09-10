@@ -2,186 +2,180 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>課堂與學費管理系統</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #333; }
-    .class-fee-system { max-width: 800px; margin: 0 auto; }
-    .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid #eef2f6; }
-    .total-income { font-size: 36px; font-weight: bold; color: #1890ff; margin: 12px 0; }
-    
-    /* 進度條 */
-    .progress-container { background: #eef2f6; height: 14px; border-radius: 7px; position: relative; margin: 20px 0 10px; overflow: hidden; }
-    .progress-bar { background: #52c41a; height: 100%; width: 0%; transition: width 0.3s ease; }
-    .progress-labels { display: flex; justify-content: space-between; font-size: 12px; color: #8c8c8c; margin-top: 6px; }
-    .percent-text { font-weight: bold; color: #52c41a; font-size: 14px; }
-    
-    /* 統計區塊 */
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-    @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr; } }
-    
-    /* 學生列表 */
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #f0f0f0; padding-bottom: 12px; }
-    .student-list { padding: 0; margin: 0; }
-    .student-item { list-style: none; border-bottom: 1px solid #f0f0f0; padding: 18px 0; display: flex; flex-direction: column; gap: 10px; }
-    .student-item:last-child { border-bottom: none; }
-    .student-info, .status-section, .name-section, .controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .name-section, .status-section { justify-content: flex-start; }
-    .name { font-size: 18px; font-weight: bold; color: #1f1f1f; }
-    
-    /* 標籤樣式 */
-    .badge { padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-    .badge.single { background-color: #f9f0ff; color: #722ed1; }
-    .badge.monthly { background-color: #e6f7ff; color: #1890ff; }
-    .badge.prepaid { background-color: #f6ffed; color: #52c41a; }
-    .badge.paid { background-color: #f6ffed; color: #52c41a; }
-    .badge.unpaid { background-color: #fff1f0; color: #f5222d; }
-    
-    .price-info { font-size: 14px; color: #666; background: #fafafa; padding: 10px; border-radius: 6px; }
-    .paid-time { font-size: 12px; color: #8c8c8c; background: #fff; padding: 2px 8px; border-radius: 4px; border: 1px solid #d9d9d9; }
-    .total-amount-display { margin-top: 6px; font-size: 15px; font-weight: bold; color: #000; }
-    
-    /* 按鈕樣式 */
-    .btn-counter { width: 30px; height: 30px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; border-radius: 6px; font-weight: bold; }
-    .btn-counter:disabled { background: #f5f5f5; cursor: not-allowed; color: #bfbfbf; }
-    .btn-primary { background: #1890ff; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .btn-primary:hover { background: #40a9ff; }
-    .btn-export { background: #52c41a; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 8px; }
-    .btn-settle { background: #722ed1; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
-    .btn-status { background: #fff; border: 1px solid #d9d9d9; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; color: #595959; }
-    .btn-delete { background: none; border: none; color: #ff4d4f; cursor: pointer; font-size: 18px; }
-    
-    /* 搜尋與過濾面板 */
-    .filter-controls-container { display: flex; flex-direction: column; gap: 14px; background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 18px 0; }
-    .input-search { padding: 8px 14px; border: 1px solid #d9d9d9; border-radius: 6px; width: 100%; max-width: 280px; font-size: 14px; }
-    .billing-filters { display: flex; flex-wrap: wrap; gap: 8px; }
-    .btn-tag { padding: 6px 14px; border: 1px solid #d9d9d9; background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; color: #595959; }
-    .btn-tag.active { background: #595959; color: #fff; border-color: #595959; }
-    
-    /* 彈出對話框 */
-    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index: 1000; }
-    .modal-content { background:#fff; padding:28px; border-radius:12px; width:100%; max-width:420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-    .form-item { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
-    .form-item label { font-size: 14px; font-weight: bold; color: #434343; }
-    .form-item input, .form-item select { padding: 10px; border: 1px solid #d9d9d9; border-radius:6px; font-size: 14px; }
-    .empty-list { text-align: center; padding: 40px; color: #bfbfbf; list-style: none; font-size: 15px; }
-  </style>
+  <!-- Tailwind CSS -->
+  <script src="https://tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com"></script>
+  <!-- SheetJS for Excel Export -->
+  <script src="https://jsdelivr.net"></script>
 </head>
-<body>
-
-  <div class="class-fee-system">
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
+  <div id="app" class="max-w-2xl mx-auto p-4 pb-24 min-h-screen">
     
-    <!-- 1. 本月預估總收入看板 -->
-    <section class="card">
-      <h3>🗓 本月預估總收入</h3>
-      <div class="total-income" id="totalIncomeDisplay">$0</div>
-      <div class="progress-container">
-        <div class="progress-bar" id="progressBar"></div>
+    <!-- 頂部標題與工具列 -->
+    <header class="flex justify-between items-center mb-5">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-tight">課堂與學費管理</h1>
+        <p class="text-xs text-slate-500 mt-0.5">雲端同步 ‧ 手機即時紀錄</p>
       </div>
-      <div class="progress-labels">
-        <span id="collectedIncomeLabel">0% (已收: $0)</span>
-        <span class="percent-text" id="progressPercentDisplay">0%</span>
-        <span>100%</span>
+      <div class="flex gap-2">
+        <button @click="exportToExcel" class="px-3 py-2 bg-emerald-600 active:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center gap-1.5 transition">
+          <span>📊 匯出 Excel</span>
+        </button>
+        <button @click="showModal = true" class="px-3 py-2 bg-indigo-600 active:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center gap-1 transition">
+          <span>＋ 新增學生</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 財務與課堂統計看板 -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-5">
+      <div class="grid grid-cols-3 gap-2 text-center pb-3 border-b border-slate-100">
+        <div>
+          <span class="block text-xs text-slate-400 font-medium mb-1">已收學費</span>
+          <span class="text-base font-bold text-emerald-600">${{ formatNumber(stats.collected) }}</span>
+        </div>
+        <div>
+          <span class="block text-xs text-slate-400 font-medium mb-1">未收學費</span>
+          <span class="text-base font-bold text-amber-600">${{ formatNumber(stats.uncollected) }}</span>
+        </div>
+        <div>
+          <span class="block text-xs text-slate-400 font-medium mb-1">預估總額</span>
+          <span class="text-base font-bold text-slate-900">${{ formatNumber(stats.total) }}</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-center pt-3 text-xs text-slate-600">
+        <div>堂數：已上 <b class="text-indigo-600 font-semibold">{{ stats.completedLessons }}</b> 堂 / 待上 {{ stats.pendingLessons }} 堂</div>
+        <div>時數：已上 <b class="text-indigo-600 font-semibold">{{ stats.completedHours }}</b> h / 待上 {{ stats.pendingHours }} h</div>
       </div>
     </section>
 
-    <!-- 2. 統計數據區塊 -->
-    <div class="stats-grid">
-      <section class="card">
-        <h3>📚 課堂統計</h3>
-        <div style="margin-top: 8px; line-height: 1.6;" id="classStatsDisplay">
-          <!-- 由 JS 動態寫入 -->
-        </div>
-      </section>
-      <section class="card">
-        <h3>💰 收入統計</h3>
-        <div style="margin-top: 8px; line-height: 1.6;" id="revenueStatsDisplay">
-          <!-- 由 JS 動態寫入 -->
-        </div>
-      </section>
+    <!-- 類別篩選標籤 -->
+    <div class="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none text-xs">
+      <button v-for="tab in tabs" :key="tab.type" @click="currentTab = tab.type"
+        :class="currentTab === tab.type ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200'"
+        class="px-3.5 py-1.5 rounded-full font-medium whitespace-nowrap transition">
+        {{ tab.label }} ({{ countByType(tab.type) }})
+      </button>
     </div>
 
-    <!-- 3. 學生課堂明細與功能控制區 -->
-    <section class="card">
-      <div class="section-header">
-        <h3>👤 學生課堂與收費明細</h3>
-        <div>
-          <button onclick="exportToCSV()" class="btn-export">📥 匯出 CSV 報表</button>
-          <button onclick="openModal()" class="btn-primary">＋ 新增學生課堂</button>
+    <!-- 學生名單列表 -->
+    <div class="space-y-3.5">
+      <div v-for="student in filteredStudents" :key="student.id" class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative">
+        <div class="flex justify-between items-start mb-2.5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-base text-slate-900">{{ student.name }}</span>
+              <span :class="getTypeBadge(student.billingType)" class="text-[11px] px-2 py-0.5 rounded-full font-medium">
+                {{ getBillingTypeName(student.billingType) }}
+              </span>
+            </div>
+            <span class="text-xs text-slate-400 mt-1 block">
+              ${{ student.rate }}/堂 ‧ {{ student.duration }}小時/堂
+            </span>
+          </div>
+          
+          <!-- 付款標籤切換 -->
+          <button @click="togglePaidStatus(student)" :class="student.isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'" class="border text-xs px-2.5 py-1 rounded-full font-semibold transition">
+            {{ student.isPaid ? '✓ 已繳費' : '✕ 未繳費' }}
+          </button>
+        </div>
+
+        <!-- 類型專屬說明資訊 -->
+        <div class="bg-slate-50 rounded-lg p-2.5 text-xs text-slate-600 mb-3 space-y-1">
+          <template v-if="student.billingType === 'prepaid'">
+            <div class="flex justify-between">
+              <span>預繳進度：已上 {{ student.completed }} 堂 / 總計 {{ student.totalPrepaid }} 堂</span>
+              <span :class="student.totalPrepaid - student.completed <= 2 ? 'text-rose-600 font-bold' : 'text-slate-500'">剩餘 {{ student.totalPrepaid - student.completed }} 堂</span>
+            </div>
+          </template>
+          <template v-else-if="student.billingType === 'monthly'">
+            <div class="flex justify-between">
+              <span>本月堂數進度：已上 {{ student.completed }} 堂 / 預估 {{ student.completed + (student.pending || 0) }} 堂</span>
+              <span class="font-medium text-slate-700">應收學費：${{ formatNumber(student.rate * (student.completed + (student.pending || 0))) }}</span>
+            </div>
+          </template>
+          <template v-else-if="student.billingType === 'single'">
+            <div class="flex justify-between items-center">
+              <span>當期隨堂未結：{{ student.completed }} 堂</span>
+              <span class="font-medium text-slate-700">本次費用：${{ formatNumber(student.completed * student.rate) }}</span>
+            </div>
+          </template>
+        </div>
+
+        <!-- 堂數增減與操作區塊 -->
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-semibold text-slate-500">已上堂數</span>
+            <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+              <button @click="updateCompleted(student, -1)" class="w-8 h-8 flex items-center justify-center font-bold text-slate-600 active:bg-slate-200">−</button>
+              <span class="w-8 text-center text-sm font-bold text-slate-800">{{ student.completed }}</span>
+              <button @click="updateCompleted(student, 1)" class="w-8 h-8 flex items-center justify-center font-bold text-slate-600 active:bg-slate-200">＋</button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button v-if="student.billingType === 'single' && student.completed > 0" @click="resetSingleStudent(student)" class="text-xs px-2 py-1 bg-slate-100 text-slate-700 active:bg-slate-200 rounded-md">
+              結清歸零
+            </button>
+            <button @click="removeStudent(student.id)" class="text-xs text-rose-500 active:text-rose-700 px-1 py-1">
+              刪除
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- 雙軌搜尋與快速分類過濾列 -->
-      <div class="filter-controls-container">
-        <input type="text" id="searchInput" placeholder="🔍 輸入姓名快速搜尋..." class="input-search" oninput="handleSearch(this.value)">
-        <div class="billing-filters">
-          <button id="filter-all" class="btn-tag active" onclick="handleFilter('all')">全部 (0)</button>
-          <button id="filter-monthly" class="btn-tag" onclick="handleFilter('monthly')">常態月結</button>
-          <button id="filter-prepaid" class="btn-tag" onclick="handleFilter('prepaid')">期繳/預收</button>
-          <button id="filter-single" class="btn-tag" onclick="handleFilter('single')">單堂繳費</button>
-        </div>
+      <div v-if="filteredStudents.length === 0" class="text-center py-12 text-slate-400 text-sm">
+        目前沒有符合條件的學生資料。
       </div>
+    </div>
 
-      <!-- 學生清單掛載點 -->
-      <ul class="student-list" id="studentListContainer">
-        <!-- 由 JS 動態渲染 -->
-      </ul>
-    </section>
+    <!-- 新增學生 Modal 彈窗 -->
+    <div v-if="showModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div class="bg-white rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-base text-slate-900">新增學生課堂</h3>
+          <button @click="showModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
 
-    <!-- 4. 新增學生彈窗 -->
-    <div class="modal-overlay" id="studentModal" onclick="if(event.target===this) closeModal()">
-      <div class="modal-content">
-        <h4 style="margin-top:0;">＋ 新增學生課堂項目</h4>
-        <form id="addStudentForm" onsubmit="handleFormSubmit(event)">
-          <div class="form-item"><label>學生姓名</label><input id="formName" type="text" required placeholder="例如：張小寶"></div>
-          <div class="form-item">
-            <label>計費方式</label>
-            <select id="formBillingType" onchange="handleFormTypeChange(this.value)">
-              <option value="monthly">常態月結</option>
-              <option value="prepaid">預付包堂 (一次買多堂)</option>
-              <option value="single">單堂預約 (隨堂付)</option>
+        <form @submit.prevent="addStudent" class="space-y-4 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">學生姓名</label>
+            <input v-model="form.name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-indigo-600" placeholder="例如：王小明">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">計費方式</label>
+            <select v-model="form.billingType" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-indigo-600">
+              <option value="monthly">常態月結 (每月依實際上課堂數結算)</option>
+              <option value="prepaid">預付包堂 (一次預收多堂費用)</option>
+              <option value="single">單堂預約 (隨堂付費)</option>
             </select>
           </div>
-          <div class="form-item"><label>每堂學費 ($)</label><input id="formRate" type="number" min="0" value="1000" required></div>
-          <div class="form-item"><label>每堂時數 (小時)</label><input id="formDuration" type="number" step="0.5" min="0" value="1" required></div>
-          
-          <div v-ext id="extendMonthlyGroup" class="form-item"><label>本月待上堂數 (預估)</label><input id="formPending" type="number" min="0" value="4"></div>
-          <div v-ext id="extendPrepaidGroup" class="form-item" style="display:none;"><label>一次預付總堂數</label><input id="formTotalPrepaid" type="number" min="1" value="10"></div>
-          
-          <div style="margin: 16px 0 20px;"><label><input id="formIsPaid" type="checkbox"> 建立此項目時學費已收清</label></div>
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button type="button" onclick="closeModal()" class="btn-status" style="padding: 8px 16px;">取消</button>
-            <button type="submit" class="btn-primary">確認新增</button>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">每堂學費 ($)</label>
+              <input v-model.number="form.rate" type="number" required min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">單堂時數 (h)</label>
+              <input v-model.number="form.duration" type="number" step="0.5" required min="0.5" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
           </div>
-        </form>
-      </div>
-    </div>
 
-  </div>
+          <div v-if="form.billingType === 'monthly'">
+            <label class="block font-semibold text-slate-700 mb-1">本月預計待上堂數</label>
+            <input v-model.number="form.pending" type="number" min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="預估堂數">
+          </div>
 
-  <script>
-    // 🌟 全原生 JavaScript 資料驅動狀態管理系統 (完全相容 Java 伺服器)
-    var STORAGE_KEY = 'java_compatible_class_fee_manager_data';
-    var currentFilter = 'all';
-    var searchQuery = '';
-    var students = [];
+          <div v-if="form.billingType === 'prepaid'">
+            <label class="block font-semibold text-slate-700 mb-1">一次預付總堂數 (包堂)</label>
+            <input v-model.number="form.totalPrepaid" type="number" min="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="例如：10">
+          </div>
 
-    // 1. 初始化讀取 LocalStorage 或是預設資料
-    function init() {
-      var saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          students = JSON.parse(saved);
-        } catch (e) {
-          console.error(e);
-          loadDefaultData();
-        }
-      } else {
-        loadDefaultData();
-      }
-      render();
-    }
-
-    function loadDefaultData() {
-      students = [
-        { id: 1, name: '張小明', billingType: 'monthly', isPaid: false, rate: 1200, duration: 1.5, completed: 5, pending: 3, paidAt: null },
+          <div class="flex items-center gap-2 pt-2">
+            <input type="checkbox" id="isPaid" v-model="form.isPaid" class="w-4 h-4 text-indigo-600 rounded">
+            <label for="isPaid" class="font-medium text-slate-700">建立時已收取該筆款項</label>
