@@ -1,0 +1,295 @@
+<template>
+  <div class="class-fee-system">
+    <!-- Header -->
+    <header class="header">
+      <Header level="###" display="課堂與學費管理系統 (全面連動版)" />
+    </header>
+
+    <!-- 1. 本月預估總收入看板 (動態連動) -->
+    <section class="card income-summary">
+      <Header level="####" display="🗓 本月預估總收入" />
+      <div class="total-income">${{ formatNumber(stats.totalIncome) }}</div>
+      
+      <!-- 進度條 (已收金額 / 總收入) -->
+      <div class="progress-container">
+        <div class="progress-bar" :style="{ width: stats.progressPercent + '%' }"></div>
+        <div class="progress-labels">
+          <span>0% (已收: ${{ formatNumber(stats.collectedIncome) }})</span>
+          <span class="percent-text">{{ stats.progressPercent }}%</span>
+          <span>100%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 統計數據區塊 (動態連動) -->
+    <div class="stats-grid">
+      <!-- 課堂統計 -->
+      <section class="card class-stats">
+        <Header level="####" display="📚 課堂統計" />
+        <div class="stats-row">
+          <div>堂數：已上 <strong>{{ stats.completedLessons }}</strong> 堂 / 待上 <strong>{{ stats.pendingLessons }}</strong> 堂</div>
+          <div>時數：已上 <strong>{{ stats.completedHours }}</strong> h / 待上 <strong>{{ stats.pendingHours }}</strong> h</div>
+        </div>
+      </section>
+
+      <!-- 收入統計 -->
+      <section class="card revenue-stats">
+        <Header level="####" display="💰 收入統計" />
+        <ul class="stats-list">
+          <li>已收（含預付）：<span class="text-success">${{ formatNumber(stats.collectedIncome) }}</span></li>
+          <li>未收（月結/單堂）：<span class="text-danger">${{ formatNumber(stats.uncollectedIncome) }}</span></li>
+          <li class="total">總計預估收入：<span>${{ formatNumber(stats.totalIncome) }}</span></li>
+        </ul>
+        <small class="hint">* 系統已依各自計費方式自動分類加總</small>
+      </section>
+    </div>
+
+    <!-- 3. 學生課堂與收費明細 -->
+    <section class="card student-details">
+      <div class="section-header">
+        <Header level="####" display="👤 學生課堂與收費明細" />
+        <div class="action-group">
+          <button @click="openModal" class="btn-primary">＋ 新增學生課堂項目</button>
+        </div>
+      </div>
+
+      <!-- 學生列表 -->
+      <ul class="student-list">
+        <li v-for="student in students" :key="student.id" class="student-item" :class="{ 'is-paid': student.isPaid }">
+          
+          <div class="student-info">
+            <span class="name">{{ student.name }}</span>
+            
+            <!-- 計費模式標籤 -->
+            <span class="badge" :class="student.billingType">
+              {{ getBillingTypeName(student.billingType) }}
+            </span>
+            
+            <!-- 付款狀態標籤 -->
+            <span class="badge" :class="{ 'paid': student.isPaid, 'unpaid': !student.isPaid }">
+              {{ student.isPaid ? '已收' : '未收' }}
+            </span>
+          </div>
+
+          <div class="price-info">
+            <span>${{ student.rate }}/堂 ‧ {{ student.duration }}h/堂</span>
+            
+            <!-- 依模式呈現不同文字說明 -->
+            <span v-if="student.billingType === 'prepaid'" class="context-info">
+              ( 預付包堂：共 {{ student.totalPrepaid }} 堂 / 剩餘 <strong :class="{ 'text-danger': student.remainingPrepaid <= 1 }">{{ student.remainingPrepaid }}</strong> 堂 )
+            </span>
+            <span v-else-if="student.billingType === 'single'" class="context-info">
+              ( 隨堂付：來上課才收費 / 當期累計上 {{ student.completed }} 堂 )
+            </span>
+            <span v-else-if="student.billingType === 'monthly'" class="context-info">
+              ( 月結制：本月預計上 {{ student.completed + student.pending }} 堂 )
+            </span>
+
+            <div class="total-amount-display">
+              {{ getPriceLabel(student.billingType) }}: 
+              <span class="total-amount">${{ formatNumber(calculateTotal(student)) }}</span>
+            </div>
+          </div>
+
+          <!-- 操作控制項 -->
+          <div class="controls">
+            <div class="counter">
+              <span>已上堂數:</span>
+              <button @click="updateLessons(student, -1)" :disabled="student.completed <= 0" class="btn-counter">-</button>
+              <span class="count">{{ student.completed }}</span>
+              <button @click="updateLessons(student, 1)" class="btn-counter">+</button>
+            </div>
+            
+            <div class="action-buttons">
+              <button @click="togglePaidStatus(student)" class="btn-status">
+                {{ student.isPaid ? '變更為未收' : '變更為已收' }}
+              </button>
+              <button @click="removeStudent(student.id)" class="btn-delete">✕</button>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- 4. 新增學生彈出視窗 (Modal) -->
+    <div v-if="isModalOpen" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-content">
+        <Header level="####" display="＋ 新增學生課堂" />
+        
+        <form @submit.prevent="submitForm" class="modal-form">
+          <div class="form-item">
+            <label>學生姓名</label>
+            <input v-model="form.name" type="text" required placeholder="請輸入姓名">
+          </div>
+
+          <div class="form-item">
+            <label>計費方式</label>
+            <select v-model="form.billingType">
+              <option value="monthly">常態月結</option>
+              <option value="prepaid">預付包堂 (一次買多堂)</option>
+              <option value="single">單堂預約 (來上課才收)</option>
+            </select>
+          </div>
+
+          <div class="form-item">
+            <label>每堂學費 ($)</label>
+            <input v-model.number="form.rate" type="number" min="0" required>
+          </div>
+
+          <div class="form-item">
+            <label>每堂時數 (小時)</label>
+            <input v-model.number="form.duration" type="number" step="0.5" min="0" required>
+          </div>
+
+          <!-- 根據計費方式動態顯示的延伸欄位 -->
+          <div v-if="form.billingType === 'monthly'" class="form-item">
+            <label>本月待上堂數 (預估)</label>
+            <input v-model.number="form.pending" type="number" min="0">
+          </div>
+
+          <div v-if="form.billingType === 'prepaid'" class="form-item">
+            <label>一次預付總堂數 (包堂)</label>
+            <input v-model.number="form.totalPrepaid" type="number" min="1">
+          </div>
+
+          <div class="form-item checkbox-item">
+            <label>
+              <input v-model="form.isPaid" type="checkbox"> 建立時是否已收全額費用
+            </label>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeModal" class="btn-secondary">取消</button>
+            <button type="submit" class="btn-primary">確認新增</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed } from 'vue'
+
+// 1. 核心資料來源：學生清單
+const students = ref([
+  { id: 1, name: '張小明', billingType: 'monthly', isPaid: false, rate: 1200, duration: 1.5, completed: 5, pending: 3 },
+  { id: 2, name: '王大同', billingType: 'prepaid', isPaid: true, rate: 1000, duration: 1, completed: 4, totalPrepaid: 10, remainingPrepaid: 6 },
+  { id: 3, name: '陳小華', billingType: 'single', isPaid: false, rate: 1500, duration: 1, completed: 2, pending: 0 } // 單堂隨堂付
+])
+
+// 2. 彈出視窗表單控管
+const isModalOpen = ref(false)
+const initialForm = {
+  name: '',
+  billingType: 'monthly',
+  isPaid: false,
+  rate: 1000,
+  duration: 1,
+  completed: 0,
+  pending: 0,
+  totalPrepaid: 10
+}
+const form = reactive({ ...initialForm })
+
+// 3. 全自動動態統計資訊 (將原先死的 stats 改為 computed 計算屬性)
+const stats = computed(() => {
+  let totalIncome = 0
+  let collectedIncome = 0
+  let uncollectedIncome = 0
+  let completedLessons = 0
+  let pendingLessons = 0
+  let completedHours = 0
+  let pendingHours = 0
+
+  students.value.forEach(student => {
+    const amount = calculateTotal(student)
+    
+    // 累加金額
+    totalIncome += amount
+    if (student.isPaid) {
+      collectedIncome += amount
+    } else {
+      uncollectedIncome += amount
+    }
+
+    // 累加堂數與時數
+    completedLessons += student.completed
+    completedHours += (student.completed * student.duration)
+
+    if (student.billingType === 'monthly') {
+      pendingLessons += student.pending
+      pendingHours += (student.pending * student.duration)
+    }
+  })
+
+  // 計算進度百分比
+  const progressPercent = totalIncome > 0 ? Math.round((collectedIncome / totalIncome) * 100) : 0
+
+  return {
+    totalIncome,
+    collectedIncome,
+    uncollectedIncome,
+    completedLessons,
+    pendingLessons,
+    completedHours,
+    pendingHours,
+    progressPercent
+  }
+})
+
+// 4. 工具與邏輯函式
+const getBillingTypeName = (type) => {
+  const types = { monthly: '常態月結', prepaid: '預付包堂', single: '單堂預約' }
+  return types[type] || '未定'
+}
+
+const getPriceLabel = (type) => {
+  const labels = { prepaid: '購買總額', single: '已上累計應收', monthly: '本月應收總額' }
+  return labels[type] || '總計'
+}
+
+const calculateTotal = (student) => {
+  switch (student.billingType) {
+    case 'prepaid':
+      return student.totalPrepaid * student.rate
+    case 'single':
+      return student.completed * student.rate // 單堂按實際已上堂數收費
+    case 'monthly':
+    default:
+      return (student.completed + student.pending) * student.rate
+  }
+}
+
+// 變更已上堂數邏輯
+const updateLessons = (student, amount) => {
+  student.completed += amount
+  
+  if (student.billingType === 'prepaid') {
+    student.remainingPrepaid -= amount
+    if (student.remainingPrepaid < 0) student.remainingPrepaid = 0
+    if (student.remainingPrepaid > student.totalPrepaid) student.remainingPrepaid = student.totalPrepaid
+  }
+  
+  // 防呆：單堂隨堂付若堂數變動且原本標記已收，可視需求改為未收
+  if (student.billingType === 'single' && amount > 0) {
+    student.isPaid = false // 有新上課，狀態轉為未收費
+  }
+}
+
+// 表單操作
+const openModal = () => {
+  Object.assign(form, initialForm) // 重設表單
+  isModalOpen.value = true
+}
+const closeModal = () => { isModalOpen.value = false }
+
+const submitForm = () => {
+  const newStudent = {
+    id: Date.now(),
+    name: form.name,
+    billingType: form.billingType,
+    isPaid: form.isPaid,
+    rate: form.rate,
+    duration: form.duration,
+    completed: form.completed,
