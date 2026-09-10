@@ -1,0 +1,223 @@
+<template>
+  <div class="class-fee-system">
+    <!-- 1. 頂部看板與數據統計（維持動態連動，此處略過以節省篇幅） -->
+
+    <!-- 3. 學生課堂與收費明細 -->
+    <section class="card student-details">
+      <div class="section-header">
+        <Header level="####" display="👤 學生課堂與收費明細" />
+        <div class="action-group">
+          <!-- 🌟 新增：匯出 CSV 報表按鈕 -->
+          <button @click="exportToCSV" class="btn-export">
+            📥 匯出 CSV 報表
+          </button>
+          <button @click="openModal" class="btn-primary">
+            ＋ 新增學生課堂項目
+          </button>
+        </div>
+      </div>
+
+      <!-- 搜尋與快速篩選控制區塊 -->
+      <div class="filter-controls-container">
+        <div class="search-box">
+          <input v-model="searchQuery" type="text" placeholder="🔍 輸入學生姓名搜尋..." class="input-search">
+          <button v-if="searchQuery" @click="searchQuery = ''" class="btn-clear-search">✕</button>
+        </div>
+
+        <div class="billing-filters">
+          <button @click="currentFilter = 'all'" :class="['btn-tag', { active: currentFilter === 'all' }]">
+            全部 ({{ students.length }})
+          </button>
+          <button @click="currentFilter = 'monthly'" :class="['btn-tag', 'monthly', { active: currentFilter === 'monthly' }]">
+            常態月結 ({{ countByType('monthly') }})
+          </button>
+          <button @click="currentFilter = 'prepaid'" :class="['btn-tag', 'prepaid', { active: currentFilter === 'prepaid' }]">
+            期繳/預收 ({{ countByType('prepaid') }})
+          </button>
+          <button @click="currentFilter = 'single'" :class="['btn-tag', 'single', { active: currentFilter === 'single' }]">
+            單堂繳費 ({{ countByType('single') }})
+          </button>
+        </div>
+      </div>
+
+      <!-- 學生列表 -->
+      <ul class="student-list">
+        <li v-for="student in filteredStudents" :key="student.id" class="student-item" :class="{ 'is-paid': student.isPaid }">
+          <div class="student-info">
+            <div class="name-section">
+              <span class="name">{{ student.name }}</span>
+              <span class="badge" :class="student.billingType">{{ getBillingTypeName(student.billingType) }}</span>
+            </div>
+            <div class="status-section">
+              <span v-if="student.isPaid && student.paidAt" class="paid-time">📅 {{ student.paidAt }}</span>
+              <span class="badge" :class="{ 'paid': student.isPaid, 'unpaid': !student.isPaid }">
+                {{ student.isPaid ? '已收' : '未收' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="price-info">
+            <span>${{ student.rate }}/堂 ‧ {{ student.duration }}h/堂</span>
+            <span v-if="student.billingType === 'prepaid'" class="context-info">( 包堂：共 {{ student.totalPrepaid }} 堂 / 剩餘 {{ student.remainingPrepaid }} 堂 )</span>
+            <span v-else-if="student.billingType === 'single'" class="context-info">( 隨堂付 / 當期上 {{ student.completed }} 堂 )</span>
+            <span v-else-if="student.billingType === 'monthly'" class="context-info">( 月結 / 本月預計上 {{ student.completed + student.pending }} 堂 )</span>
+
+            <div class="total-amount-display">
+              {{ getPriceLabel(student.billingType) }}: <span class="total-amount">${{ formatNumber(calculateTotal(student)) }}</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="counter">
+              <span>已上堂數:</span>
+              <button @click="updateLessons(student, -1)" :disabled="student.completed <= 0" class="btn-counter">-</button>
+              <span class="count">{{ student.completed }}</span>
+              <button @click="updateLessons(student, 1)" class="btn-counter">+</button>
+            </div>
+            <div class="action-buttons">
+              <button v-if="student.billingType === 'single' && student.completed > 0" @click="settleSinglePayment(student)" class="btn-settle">✓ 隨堂結清</button>
+              <button @click="togglePaidStatus(student)" class="btn-status">{{ student.isPaid ? '變更為未收' : '變更為已收' }}</button>
+              <button @click="removeStudent(student.id)" class="btn-delete">✕</button>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- 4. 新增學生彈出視窗 (Modal) （維持原結構，此處略過） -->
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, watch } from 'vue'
+
+// 1. 資料讀取與 LocalStorage 監聽機制
+const STORAGE_KEY = 'class_fee_manager_students'
+const loadInitialData = () => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved) { try { return JSON.parse(saved) } catch (e) { console.error(e) } }
+  return [
+    { id: 1, name: '張小明', billingType: 'monthly', isPaid: false, rate: 1200, duration: 1.5, completed: 5, pending: 3, paidAt: null },
+    { id: 2, name: '王大同', billingType: 'prepaid', isPaid: true, rate: 1000, duration: 1, completed: 4, totalPrepaid: 10, remainingPrepaid: 6, paidAt: '2026-09-01 10:30' },
+    { id: 3, name: '陳小華', billingType: 'single', isPaid: true, rate: 1500, duration: 1, completed: 2, pending: 0, paidAt: '2026-09-09 18:15' }
+  ]
+}
+const students = ref(loadInitialData())
+watch(students, (newStudents) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(newStudents)) }, { deep: true })
+
+// 篩選、搜尋、彈窗響應式變數
+const currentFilter = ref('all')
+const searchQuery = ref('')
+const isModalOpen = ref(false)
+const form = reactive({ name: '', billingType: 'monthly', isPaid: false, rate: 1000, duration: 1, completed: 0, pending: 0, totalPrepaid: 10 })
+
+// 雙軌過濾器與統計模組
+const filteredStudents = computed(() => {
+  return students.value.filter(s => {
+    const matchesFilter = currentFilter.value === 'all' || s.billingType === currentFilter.value
+    const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.trim().toLowerCase())
+    return matchesFilter && matchesSearch
+  })
+})
+
+const calculateTotal = (student) => {
+  if (student.billingType === 'prepaid') return student.totalPrepaid * student.rate
+  if (student.billingType === 'single') return student.completed * student.rate
+  return (student.completed + student.pending) * student.rate
+}
+
+// 🌟 核心功能優化：前端純 JavaScript 導出 CSV 報表
+const exportToCSV = () => {
+  if (students.value.length === 0) {
+    alert('當前名冊內無學生資料，無法匯出！')
+    return
+  }
+
+  // 1. 定義 CSV 欄位表頭
+  const headers = ['學生姓名', '計費方式', '學費單價', '時數/堂', '當期已上堂數', '計費延伸狀態', '總計金額', '付款狀態', '最新繳費時間']
+  
+  // 2. 將學生陣列轉換為 CSV 的橫列資料
+  const rows = students.value.map(s => {
+    const extendStatus = s.billingType === 'prepaid' 
+      ? `剩餘${s.remainingPrepaid}堂(總${s.totalPrepaid}堂)` 
+      : (s.billingType === 'monthly' ? `待上${s.pending}堂` : '隨堂付結清')
+    
+    return [
+      s.name,
+      getBillingTypeName(s.billingType),
+      `$${s.rate}`,
+      `${s.duration}h`,
+      s.completed,
+      extendStatus,
+      `$${calculateTotal(s)}`,
+      s.isPaid ? '已收' : '未收',
+      s.paidAt ? s.paidAt : '—'
+    ]
+  })
+
+  // 3. 組合文字結構，並使用 \n 換行
+  const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+
+  // 4. 🌟 重點防亂碼：加上 UTF-8 的 BOM 檔頭 (\uFEFF)
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  
+  // 5. 建立虛擬節點觸發下載
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  
+  const today = new Date().toISOString().slice(0, 10)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `學生課堂與學費明細表_${today}.csv`)
+  link.style.visibility = 'hidden'
+  
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// 基礎狀態控制
+const getCurrentTimestamp = () => {
+  const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+const togglePaidStatus = (student) => {
+  student.isPaid = !student.isPaid
+  student.paidAt = student.isPaid ? getCurrentTimestamp() : null
+}
+const settleSinglePayment = (student) => {
+  if (confirm(`確認已收隨堂學費 $${calculateTotal(student)} 嗎？確認後已上堂數將歸零。`)) {
+    student.completed = 0; student.isPaid = false; student.paidAt = null
+  }
+}
+const updateLessons = (student, amount) => {
+  student.completed += amount
+  if (student.billingType === 'prepaid') {
+    student.remainingPrepaid = Math.max(0, Math.min(student.totalPrepaid, student.remainingPrepaid - amount))
+  }
+  if (amount > 0) { student.isPaid = false; student.paidAt = null }
+}
+const removeStudent = (id) => { if (confirm('確定刪除？')) students.value = students.value.filter(s => s.id !== id) }
+const countByType = (type) => students.value.filter(s => s.billingType === type).length
+const formatNumber = (val) => val ? val.toLocaleString() : '0'
+const getBillingTypeName = (type) => { return { monthly: '常態月結', prepaid: '預付包堂', single: '單堂隨堂付' }[type] || '未定' }
+const getPriceLabel = (type) => { return { prepaid: '購買總額', single: '當期應收', monthly: '本月應收總額' }[type] || '總計' }
+</script>
+
+<style scoped>
+/* 匯出按鈕高質感樣式 */
+.btn-export {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+  margin-right: 8px;
+}
+.btn-export:hover {
+  background-color: #218838;
+}
+.section-header { display: flex; justify-content: space-between; align-items: center; }
+</style>
