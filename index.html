@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>課堂與學費管理系統</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2E3A44">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="學費管理">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --cream:#FBF6EC;
+    --card:#FFFFFF;
+    --card-soft:#FFFDF8;
+    --line:#EFE6D6;
+    --line-strong:#E3D6BE;
+    --ink:#2E3A44;
+    --ink-soft:#6C7680;
+    --muted:#A79E8E;
+    --green:#5FA97A;
+    --green-bg:#E9F5EC;
+    --amber:#D99B4E;
+    --amber-bg:#FBEEDC;
+    --teal:#5FA0A6;
+    --teal-bg:#E5F2F1;
+    --purple:#9584C9;
+    --purple-bg:#EEEAF8;
+    --danger:#D97757;
+    --shadow: 0 2px 10px rgba(60,46,20,0.05), 0 1px 2px rgba(60,46,20,0.04);
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-sm: 10px;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    background:var(--cream);
+    color:var(--ink);
+    font-family:"Noto Sans TC", sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:"Baloo 2","Noto Sans TC",sans-serif; }
+  #app{ max-width:760px; margin:0 auto; padding:20px 16px 64px; }
+
+  /* ---------- Header ---------- */
+  .top-bar{
+    display:flex; align-items:flex-start; gap:10px;
+    margin-bottom:14px; flex-wrap:wrap;
+  }
+  .top-bar .badge-icon{
+    width:38px; height:38px; border-radius:12px;
+    background:var(--teal-bg); color:var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    font-size:19px; flex-shrink:0;
+  }
+  .top-bar h1{
+    font-size:17px; font-weight:700; margin:0;
+    letter-spacing:0.2px;
+  }
+  .top-bar p{
+    margin:1px 0 0; font-size:12.5px; color:var(--muted);
+  }
+  .sync-status{
+    display:flex; align-items:center; gap:6px;
+    font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap;
+  }
+  .sync-status .dot{ width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
+  .sync-status.syncing .dot, .sync-status.loading .dot{ background:var(--teal); }
+  .sync-status.error .dot{ background:var(--danger); }
+  .sync-actions{ display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 10px; }
+  .sync-actions button{ flex:1; min-width:140px; }
+  .sync-hint{ font-size:11.5px; color:var(--muted); margin:6px 0 0; line-height:1.6; }
+  .sync-hint a{ color:var(--teal); font-weight:700; text-decoration:none; }
+  .sync-hint a:hover{ text-decoration:underline; }
+  .unsaved-note{ color:var(--amber); font-weight:700; }
+
+  /* ---------- Generic card ---------- */
+  .card{
+    background:var(--card);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);
+    padding:20px 18px 18px;
+    margin-bottom:14px;
+  }
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    font-size:14.5px; font-weight:700; color:var(--ink-soft);
+    margin:0 0 14px;
+  }
+
+  /* ---------- Income summary ---------- */
+  .income-summary{ text-align:center; }
+  .income-summary .card-title{ justify-content:center; }
+  .total-income{
+    font-size:40px; font-weight:700; color:var(--ink);
+    line-height:1.1; margin-bottom:18px; word-break:break-all;
+  }
+  .progress-container{ margin-bottom:6px; }
+  .progress-track{
+    position:relative; height:8px; border-radius:99px;
+    background:var(--line); margin:0 2px 10px;
+  }
+  .progress-fill{
+    position:absolute; inset:0; border-radius:99px;
+    background:linear-gradient(90deg,var(--teal),var(--green));
+    transition:width .35s ease;
+  }
+  .progress-knob{
+    position:absolute; top:50%; width:20px; height:20px;
+    border-radius:50%; background:var(--card);
+    border:3px solid var(--teal);
+    transform:translate(-50%,-50%);
+    box-shadow:0 2px 6px rgba(60,46,20,0.18);
+    transition:left .35s ease;
+  }
+  .progress-scale{
+    display:flex; justify-content:space-between;
+    font-size:11.5px; color:var(--muted); padding:0 2px;
+  }
+  .progress-readout{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12.5px; color:var(--ink-soft); margin-top:10px; gap:8px;
+  }
+  .progress-readout .percent{
+    font-weight:700; color:var(--teal); font-size:14px;
+  }
+  .toggle-details{
+    margin-top:14px; border:none; background:none; cursor:pointer;
+    font-size:12.5px; color:var(--ink-soft); font-weight:700;
+    text-decoration:underline; text-underline-offset:3px;
+    padding:6px;
+  }
+
+  /* ---------- Stats block (collapsible dashed frame) ---------- */
+  .stats-frame{
+    border:1.5px dashed var(--line-strong);
+    border-radius:var(--radius-lg);
+    padding:14px;
+    display:grid; grid-template-columns:1fr 1fr; gap:12px;
+    margin-top:14px;
+  }
+  @media (max-width:520px){ .stats-frame{ grid-template-columns:1fr; } }
+  .stat-card{
+    background:var(--card-soft);
+    border-radius:var(--radius-md);
+    padding:15px 15px 13px;
+    text-align:left;
+  }
+  .stat-card .card-title{ margin-bottom:12px; }
+  .stat-line{ display:flex; justify-content:space-between; font-size:13.5px; margin:9px 0; }
+  .stat-line span:first-child{ color:var(--ink-soft); }
+  .stat-line b.num{ font-size:15px; }
+  .stat-line b.amber{ color:var(--amber); }
+  .stat-list li{ display:flex; justify-content:space-between; list-style:none; font-size:13.5px; padding:7px 0; }
+  .stat-list li.total{ border-top:1px solid var(--line); margin-top:4px; padding-top:11px; font-weight:700; }
+  .stat-list .text-success{ color:var(--green); font-weight:700; }
+  .stat-list .text-danger{ color:var(--amber); font-weight:700; }
+  .divider{ border:none; border-top:1px dashed var(--line); margin:8px 0; }
+
+  /* ---------- Student section ---------- */
+  .section-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .section-header .card-title{ margin:0; }
+  .header-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-primary, .btn-export{
+    border:none; border-radius:99px;
+    padding:10px 16px; font-size:13px; font-weight:700; cursor:pointer;
+    font-family:inherit; min-height:40px;
+  }
+  .btn-primary{ background:var(--ink); color:#fff; }
+  .btn-primary:hover{ background:#1E2731; }
+  .btn-export{ background:var(--green-bg); color:var(--green); }
+  .btn-export:hover{ background:#DFF1E4; }
+  .btn-export:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  .filter-controls-container{ margin-bottom:14px; }
+  .search-box{ position:relative; margin-bottom:10px; }
+  .input-search{
+    width:100%; padding:11px 34px 11px 14px; border-radius:99px;
+    border:1.5px solid var(--line); background:var(--card-soft);
+    font-size:16px; font-family:inherit; color:var(--ink);
+  }
+  .input-search:focus{ outline:none; border-color:var(--teal); }
+  .btn-clear-search{
+    position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    border:none; background:var(--line); color:var(--ink-soft);
+    width:22px; height:22px; border-radius:50%; cursor:pointer; font-size:11px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .billing-filters{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-tag{
+    border:1.5px solid var(--line); background:var(--card-soft); color:var(--ink-soft);
+    padding:7px 13px; border-radius:99px; font-size:12.5px; font-weight:700;
+    cursor:pointer; font-family:inherit; min-height:36px;
+  }
+  .btn-tag.active{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .btn-tag.monthly.active{ background:var(--teal); border-color:var(--teal); }
+  .btn-tag.prepaid.active{ background:var(--purple); border-color:var(--purple); }
+  .btn-tag.single.active{ background:var(--amber); border-color:var(--amber); }
+
+  .student-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+  .student-item{
+    border:1.5px solid var(--line); border-radius:var(--radius-md);
+    padding:14px 15px; background:var(--card-soft);
+  }
+  .student-item.is-paid{ border-color:var(--green-bg); background:#FCFFFC; }
+  .student-info{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; flex-wrap:wrap; }
+  .name-section{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .name-section .name{ font-size:15px; font-weight:700; }
+  .badge{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; white-space:nowrap; }
+  .badge.monthly{ background:var(--teal-bg); color:var(--teal); }
+  .badge.prepaid{ background:var(--purple-bg); color:var(--purple); }
+  .badge.single{ background:var(--amber-bg); color:var(--amber); }
+  .badge.paid{ background:var(--green-bg); color:var(--green); }
+  .badge.unpaid{ background:var(--amber-bg); color:var(--amber); }
+
+  .price-info{ font-size:13px; color:var(--ink-soft); margin-bottom:10px; }
+  .price-info .context-info{ display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+  .total-amount-display{ margin-top:8px; font-size:13px; color:var(--ink-soft); }
+  .total-amount{ font-family:"Baloo 2",sans-serif; font-weight:700; color:var(--ink); font-size:15px; }
+
+  .controls{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .counter{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); }
+  .btn-counter{
+    width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line);
+    background:var(--card); font-size:16px; font-weight:700; cursor:pointer; color:var(--ink);
+    display:flex; align-items:center; justify-content:center; font-family:inherit;
+  }
+  .btn-counter:disabled{ opacity:0.35; cursor:not-allowed; }
+  .counter .count{ font-family:"Baloo 2",sans-serif; font-weight:700; min-width:18px; text-align:center; font-size:14px; }
+
+  .action-buttons{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-settle, .btn-status, .btn-delete{
+    border-radius:99px; font-size:12px; font-weight:700; cursor:pointer;
+    padding:8px 12px; font-family:inherit; border:1.5px solid transparent; min-height:34px;
+  }
+  .btn-settle{ background:var(--green-bg); color:var(--green); }
+  .btn-status{ background:var(--card); color:var(--ink-soft); border-color:var(--line); }
+  .btn-delete{ background:transparent; color:var(--muted); border-color:var(--line); width:34px; height:34px; padding:0; }
+
+  .empty-list{ text-align:center; padding:30px 10px; color:var(--muted); font-size:13px; list-style:none; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(46,58,68,0.45);
+    display:flex; align-items:center; justify-content:center; padding:16px; z-index:50;
+  }
+  .modal-content{
+    background:var(--card); border-radius:var(--radius-lg); padding:22px;
+    width:100%; max-width:400px; max-height:90vh; overflow-y:auto;
+    box-shadow:0 12px 40px rgba(30,25,10,0.25);
+  }
+  .modal-content .card-title{ margin-bottom:16px; }
+  .form-item{ margin-bottom:14px; }
+  .form-item label{ display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; }
+  .form-item input, .form-item select{
+    width:100%; padding:11px 12px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:16px; font-family:inherit; color:var(--ink);
+    background:var(--card-soft);
+  }
+  .form-item input:focus, .form-item select:focus{ outline:none; border-color:var(--teal); }
+  .checkbox-item{ display:flex; align-items:center; }
+  .checkbox-item label{ display:flex; align-items:center; gap:8px; font-weight:500; color:var(--ink); margin:0; font-size:13.5px; }
+  .checkbox-item input{ width:auto; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+  .btn-secondary{
+    background:var(--card-soft); color:var(--ink-soft); border:1.5px solid var(--line);
+    border-radius:99px; padding:10px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; min-height:40px;
+  }
+
+  @media (max-width:420px){
+    .total-income{ font-size:32px; }
+    .card{ padding:16px 14px 16px; }
+    .btn-primary, .btn-export, .btn-secondary{ flex:1; justify-content:center; }
+    .header-actions{ width:100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div class="top-bar">
+    <div class="badge-icon">🎹</div>
+    <div>
+      <h1>課堂與學費管理系統</h1>
+      <p>清楚掌握每位學生的上課進度與收費狀況</p>
+    </div>
+  </div>
+
+  <section class="card sheet-sync">
+    <p class="card-title">☁️ Google 試算表同步</p>
+
+    <template v-if="!isSignedIn">
+      <p class="sync-hint">請先用你自己的 Google 帳號登入，資料會直接跟 Google 試算表溝通，跟 Claude 無關。</p>
+      <div class="sync-actions">
+        <button class="btn-primary" @click="signIn">🔑 使用 Google 帳號登入</button>
+      </div>
+      <div class="sync-status error" v-if="signInError"><span class="dot"></span>{{ signInError }}</div>
+    </template>
+
+    <template v-else-if="!spreadsheetId">
+      <p class="sync-hint">已登入。第一次使用嗎？建立一份新的試算表，或貼上大家已經在用的那一份：</p>
+      <div class="sync-actions">
+        <button class="btn-primary" @click="createSpreadsheet" :disabled="sheetStatus === 'syncing'">＋ 建立新的試算表</button>
+      </div>
+      <div class="form-item" style="margin-top:10px">
+        <label>或貼上現有試算表的網址／ID</label>
+        <input type="text" v-model="spreadsheetInput" placeholder="https://docs.google.com/spreadsheets/d/...">
+      </div>
+      <div class="sync-actions">
+        <button class="btn-secondary" @click="useExistingSpreadsheet" :disabled="!spreadsheetInput">使用這份試算表</button>
+      </div>
+      <div class="sync-status error" v-if="sheetStatus === 'error'"><span class="dot"></span>{{ sheetMessage }}</div>
+    </template>
+
+    <template v-else>
+      <div class="sync-status" :class="sheetStatus">
+        <span class="dot"></span>
+        <span v-if="sheetStatus === 'syncing'">正在同步到 Google 試算表...</span>
+        <span v-else-if="sheetStatus === 'loading'">正在從 Google 試算表載入...</span>
+        <span v-else-if="sheetStatus === 'error'">{{ sheetMessage }}</span>
+        <span v-else-if="hasUnsavedChanges" class="unsaved-note">有尚未同步的變更，將自動於稍後同步，也可以按「立即同步」</span>
+        <span v-else-if="sheetMessage">{{ sheetMessage }}</span>
+        <span v-else-if="lastSyncedAt">已與 Google 試算表同步・{{ lastSyncedAt }}</span>
+        <span v-else>尚未同步過</span>
+      </div>
+      <div class="sync-actions">
+        <button class="btn-secondary" @click="loadFromSheets" :disabled="sheetStatus === 'syncing' || sheetStatus === 'loading'">⬇️ 從試算表載入</button>
+        <button class="btn-primary" @click="syncToSheets" :disabled="sheetStatus === 'syncing' || sheetStatus === 'loading'">☁️ 立即同步</button>
+      </div>
+      <p class="sync-hint">
+        <a :href="'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/edit'" target="_blank" rel="noopener">📄 在 Google 試算表中開啟</a>
+        ・<a href="#" @click.prevent="forgetSpreadsheet">變更試算表</a>
+        ・<a href="#" @click.prevent="signOut">登出</a>
+      </p>
+      <p class="sync-hint">權限由 Google 試算表本身的共用設定控管——只有你邀請並給予編輯權限的 Google 帳號，才能讀寫這份資料。</p>
+    </template>
+  </section>
+
+  <!-- 1. 本月預估總收入看板 -->
+  <section class="card income-summary">
+    <p class="card-title" style="justify-content:center">🗓 本月預估總收入</p>
+    <div class="total-income num">${{ formatNumber(stats.totalIncome) }}</div>
+
+    <div class="progress-container">
+      <div class="progress-track">
+        <div class="progress-fill" :style="{ width: stats.progressPercent + '%' }"></div>
+        <div class="progress-knob" :style="{ left: stats.progressPercent + '%' }"></div>
+      </div>
+      <div class="progress-scale">
+        <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+      </div>
+    </div>
+
+    <div class="progress-readout">
+      <span>已收 ${{ formatNumber(stats.collectedIncome) }}</span>
+      <span class="percent num">{{ stats.progressPercent }}%</span>
+    </div>
+
+    <button class="toggle-details" @click="showDetails = !showDetails">
+      {{ showDetails ? '收合明細 ▴' : '查看明細 ▾' }}
+    </button>
+
+    <div class="stats-frame" v-if="showDetails">
+      <div class="stat-card">
+        <p class="card-title">📚 課堂統計</p>
+        <div class="stat-line"><span>已上堂數</span><b class="num">{{ stats.completedLessons }} 堂</b></div>
+        <div class="stat-line"><span>待上堂數</span><b class="num amber">{{ stats.pendingLessons }} 堂</b></div>
+        <hr class="divider">
+        <div class="stat-line"><span>已上時數</span><b class="num">{{ stats.completedHours }} h</b></div>
+        <div class="stat-line"><span>待上時數</span><b class="num amber">{{ stats.pendingHours }} h</b></div>
+      </div>
+
+      <div class="stat-card">
+        <p class="card-title">💰 收入統計</p>
+        <ul class="stat-list">
+          <li><span>已收（含預繳）</span><span class="text-success num">${{ formatNumber(stats.collectedIncome) }}</span></li>
+          <li><span>未收（月結/單堂）</span><span class="text-danger num">${{ formatNumber(stats.uncollectedIncome) }}</span></li>
+          <li class="total"><span>總計預估收入</span><span class="num">${{ formatNumber(stats.totalIncome) }}</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 學生課堂與收費明細 -->
+  <section class="card student-details">
+    <div class="section-header">
+      <p class="card-title">👤 學生課堂與收費明細</p>
+      <div class="header-actions">
+        <button @click="exportToExcel" class="btn-export" :disabled="!isExcelReady">📥 匯出 Excel</button>
+        <button @click="openModal" class="btn-primary">＋ 新增學生</button>
+      </div>
+    </div>
+
+    <div class="filter-controls-container">
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="🔍 輸入學生姓名搜尋..."
+          class="input-search"
+        >
+        <button v-if="searchQuery" @click="searchQuery = ''" class="btn-clear-search">✕</button>
+      </div>
+
+      <div class="billing-filters">
+        <button @click="currentFilter = 'all'" :class="['btn-tag', { active: currentFilter === 'all' }]">
+          全部 ({{ students.length }})
+        </button>
+        <button @click="currentFilter = 'monthly'" :class="['btn-tag','monthly', { active: currentFilter === 'monthly' }]">
+          月結 ({{ countByType('monthly') }})
+        </button>
+        <button @click="currentFilter = 'prepaid'" :class="['btn-tag','prepaid', { active: currentFilter === 'prepaid' }]">
+          多堂預繳 ({{ countByType('prepaid') }})
+        </button>
+        <button @click="currentFilter = 'single'" :class="['btn-tag','single', { active: currentFilter === 'single' }]">
+          單堂付費 ({{ countByType('single') }})
+        </button>
+      </div>
+    </div>
+
+    <ul class="student-list">
+      <li v-for="student in filteredStudents" :key="student.id" class="student-item" :class="{ 'is-paid': student.isPaid }">
+
+        <div class="student-info">
+          <div class="name-section">
+            <span class="name">{{ student.name }}</span>
+            <span class="badge" :class="student.billingType">{{ getBillingTypeName(student.billingType) }}</span>
+          </div>
+          <span class="badge" :class="{ paid: student.isPaid, unpaid: !student.isPaid }">
+            {{ student.isPaid ? '已收' : '未收' }}
+          </span>
+        </div>
+
+        <div class="price-info">
+          <span>${{ student.rate }}/堂 ‧ {{ student.duration }}h/堂</span>
+
+          <span v-if="student.billingType === 'prepaid'" class="context-info">
+            多堂預繳：共 {{ student.totalPrepaid }} 堂 / 剩餘 {{ student.remainingPrepaid }} 堂
+          </span>
+          <span v-else-if="student.billingType === 'single'" class="context-info">
+            單堂付費：來上課才收費 / 當期累計上 {{ student.completed }} 堂
+          </span>
+          <span v-else-if="student.billingType === 'monthly'" class="context-info">
+            月結制：本月預計上 {{ student.completed + student.pending }} 堂
+          </span>
+
+          <div class="total-amount-display">
+            {{ getPriceLabel(student.billingType) }}：<span class="total-amount">${{ formatNumber(calculateTotal(student)) }}</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="counter">
+            <span>已上堂數</span>
+            <button @click="updateLessons(student, -1)" :disabled="student.completed <= 0" class="btn-counter">－</button>
+            <span class="count">{{ student.completed }}</span>
+            <button @click="updateLessons(student, 1)" class="btn-counter">＋</button>
+          </div>
+
+          <div class="action-buttons">
+            <button
+              v-if="student.billingType === 'single' && student.completed > 0"
+              @click="settleSinglePayment(student)"
+              class="btn-settle"
+            >
+              ✓ 隨堂結清歸零
+            </button>
+
+            <button @click="togglePaidStatus(student)" class="btn-status">
+              {{ student.isPaid ? '變更為未收' : '變更為已收' }}
+            </button>
+            <button @click="removeStudent(student.id)" class="btn-delete">✕</button>
+          </div>
+        </div>
+      </li>
+
+      <li v-if="filteredStudents.length === 0" class="empty-list">
+        找不到符合條件的學生項目。
+      </li>
+    </ul>
+  </section>
+
+  <!-- 3. 新增學生彈出視窗 -->
+  <div v-if="isModalOpen" class="modal-overlay" @click.self="closeModal">
+    <div class="modal-content">
+      <p class="card-title">＋ 新增學生課堂</p>
+      <form @submit.prevent="submitForm" class="modal-form">
+        <div class="form-item">
+          <label>學生姓名</label>
+          <input v-model="form.name" type="text" required placeholder="請輸入姓名">
+        </div>
+        <div class="form-item">
+          <label>計費方式</label>
+          <select v-model="form.billingType">
+            <option value="monthly">月結</option>
+            <option value="prepaid">多堂預繳（一次買多堂）</option>
+            <option value="single">單堂付費（來上課才收）</option>
+          </select>
+        </div>
+        <div class="form-item">
+          <label>每堂學費（$）</label>
+          <input v-model.number="form.rate" type="number" min="0" required>
+        </div>
+        <div class="form-item">
+          <label>每堂時數（小時）</label>
+          <input v-model.number="form.duration" type="number" step="0.5" min="0" required>
+        </div>
+        <div v-if="form.billingType === 'monthly'" class="form-item">
+          <label>本月待上堂數（預估）</label>
+          <input v-model.number="form.pending" type="number" min="0">
+        </div>
+        <div v-if="form.billingType === 'prepaid'" class="form-item">
+          <label>一次預繳總堂數（包堂）</label>
+          <input v-model.number="form.totalPrepaid" type="number" min="1">
+        </div>
+        <div class="form-item checkbox-item">
+          <label><input v-model="form.isPaid" type="checkbox"> 建立時是否已收全額費用</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" @click="closeModal" class="btn-secondary">取消</button>
+          <button type="submit" class="btn-primary">確認新增</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch } = Vue
+
+// ⚠️ 請在下面貼上你自己在 Google Cloud Console 建立的 OAuth 用戶端 ID
+const GOOGLE_CLIENT_ID = '請貼上你的-client-id.apps.googleusercontent.com'
+const SHEET_NAME = '課堂與學費管理系統-學生資料'
+const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets'
+const SPREADSHEET_ID_STORAGE_KEY = 'piano-fee-app-spreadsheet-id'
+
+createApp({
+  setup() {
+    // 學生初始資料（僅在還沒連上試算表時作為示範）
+    const students = ref([
+      { id: 1, name: '張小明', billingType: 'monthly', isPaid: false, rate: 1200, duration: 1.5, completed: 5, pending: 3 },
+      { id: 2, name: '王大同', billingType: 'prepaid', isPaid: true,  rate: 1000, duration: 1,   completed: 4, totalPrepaid: 10, remainingPrepaid: 6 },
+      { id: 3, name: '陳小華', billingType: 'single',  isPaid: true,  rate: 1500, duration: 1,   completed: 2, pending: 0 }
+    ])
+
+    // 篩選、搜尋、明細展開狀態
+    const currentFilter = ref('all')
+    const searchQuery = ref('')
+    const showDetails = ref(false)
+
+    // ---------- Google 帳號登入與試算表同步 ----------
+    // 每個人用自己的 Google 帳號登入，直接呼叫 Google Sheets API 讀寫試算表，
+    // 完全不經過 Claude。誰能不能讀寫，由 Google 試算表本身的共用權限決定。
+    const isSignedIn = ref(false)
+    const signInError = ref('')
+    const spreadsheetId = ref(localStorage.getItem(SPREADSHEET_ID_STORAGE_KEY) || '')
+    const spreadsheetInput = ref('')
+    const sheetStatus = ref('idle')     // idle | syncing | loading | error
+    const sheetMessage = ref('')
+    const lastSyncedAt = ref('')
+    const hasUnsavedChanges = ref(false)
+    let isApplyingRemoteData = false
+    let autoSyncTimer = null
+    let tokenClient = null
+    let accessToken = ''
+    let tokenExpiresAt = 0
+
+    function ensureTokenClient() {
+      if (tokenClient) return tokenClient
+      if (typeof google === 'undefined' || !google.accounts) {
+        throw new Error('Google 登入元件尚未載入完成，請稍後再試')
+      }
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        callback: () => {} // 個別呼叫時會被下面暫時覆寫
+      })
+      return tokenClient
+    }
+
+    function requestToken(promptType) {
+      return new Promise((resolve, reject) => {
+        let client
+        try { client = ensureTokenClient() } catch (e) { reject(e); return }
+        client.callback = (resp) => {
+          if (resp && resp.access_token) {
+            accessToken = resp.access_token
+            tokenExpiresAt = Date.now() + (resp.expires_in * 1000 - 60000)
+            isSignedIn.value = true
+            resolve(accessToken)
+          } else {
+            reject(new Error(resp?.error || '登入失敗，請再試一次'))
+          }
+        }
+        client.error_callback = (err) => reject(new Error(err?.message || '登入失敗，請再試一次'))
+        client.requestAccessToken({ prompt: promptType })
+      })
+    }
+
+    async function signIn() {
+      signInError.value = ''
+      try {
+        await requestToken('consent')
+      } catch (e) {
+        signInError.value = e.message
+      }
+    }
+
+    function signOut() {
+      if (accessToken && typeof google !== 'undefined' && google.accounts?.oauth2?.revoke) {
+        google.accounts.oauth2.revoke(accessToken, () => {})
+      }
+      accessToken = ''
+      tokenExpiresAt = 0
+      isSignedIn.value = false
+    }
+
+    async function ensureValidToken() {
+      if (accessToken && Date.now() < tokenExpiresAt) return accessToken
+      return requestToken('')
+    }
+
+    async function sheetsFetch(url, options = {}) {
+      const token = await ensureValidToken()
+      const res = await fetch(url, {
+        ...options,
+        headers: { ...(options.headers || {}), 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      })
+      if (!res.ok) {
+        let detail = ''
+        try { detail = (await res.json()).error?.message || '' } catch (e) {}
+        if (res.status === 403) throw new Error('沒有這份試算表的編輯權限，請請擁有者用 Google 試算表的「共用」功能加你')
+        if (res.status === 404) throw new Error('找不到這份試算表，請確認網址／ID 是否正確')
+        throw new Error(detail || ('Google API 錯誤（HTTP ' + res.status + '）'))
+      }
+      return res.status === 204 ? null : res.json()
+    }
+
+    function extractSpreadsheetId(text) {
+      const m = text.match(/[-\w]{25,}/)
+      return m ? m[0] : text.trim()
+    }
+
+    function persistSpreadsheetId(id) {
+      spreadsheetId.value = id
+      localStorage.setItem(SPREADSHEET_ID_STORAGE_KEY, id)
+    }
+
+    function forgetSpreadsheet() {
+      spreadsheetId.value = ''
+      spreadsheetInput.value = ''
+      localStorage.removeItem(SPREADSHEET_ID_STORAGE_KEY)
+      sheetMessage.value = ''
+      sheetStatus.value = 'idle'
+    }
+
+    async function createSpreadsheet() {
+      sheetStatus.value = 'syncing'
+      sheetMessage.value = ''
+      try {
+        const data = await sheetsFetch(SHEETS_API, {
+          method: 'POST',
+          body: JSON.stringify({
+            properties: { title: SHEET_NAME },
+            sheets: [{ properties: { title: '學生明細' } }, { properties: { title: 'raw_data' } }]
+          })
+        })
+        persistSpreadsheetId(data.spreadsheetId)
+        sheetStatus.value = 'idle'
+        await syncToSheets()
+      } catch (e) {
+        sheetStatus.value = 'error'
+        sheetMessage.value = '建立試算表失敗：' + e.message
+      }
+    }
+
+    async function useExistingSpreadsheet() {
+      const id = extractSpreadsheetId(spreadsheetInput.value)
+      if (!id) return
+      persistSpreadsheetId(id)
+      await loadFromSheets()
+    }
+
+    // 把學生資料濃縮成精簡的 JSON（縮短欄位名稱，降低來回傳輸的字數）
+    function toCompactPayload() {
+      return students.value.map(s => ({
+        id: s.id, n: s.name, bt: s.billingType, p: s.isPaid ? 1 : 0,
+        r: s.rate, d: s.duration, c: s.completed,
+        pd: s.billingType === 'monthly' ? (s.pending || 0) : undefined,
+        tp: s.billingType === 'prepaid' ? s.totalPrepaid : undefined,
+        rp: s.billingType === 'prepaid' ? s.remainingPrepaid : undefined
+      }))
+    }
+
+    function fromCompactPayload(arr) {
+      return arr.map(o => {
+        const s = { id: o.id, name: o.n, billingType: o.bt, isPaid: !!o.p, rate: o.r, duration: o.d, completed: o.c, pending: 0 }
+        if (o.bt === 'monthly') s.pending = o.pd || 0
+        if (o.bt === 'prepaid') { s.totalPrepaid = o.tp; s.remainingPrepaid = o.rp }
+        return s
+      })
+    }
+
+    // 給「學生明細」分頁用的人類可讀表格（二維陣列，符合 Sheets API 格式）
+    function buildReadableRows() {
+      const header = ['學生姓名', '計費方式', '每堂學費', '每堂時數(h)', '已上堂數', '備註', '預估/應收金額', '收款狀態']
+      const rows = students.value.map(s => [
+        s.name, getBillingTypeName(s.billingType), s.rate, s.duration, s.completed,
+        getContextNote(s), calculateTotal(s), s.isPaid ? '已收' : '未收'
+      ])
+      return [header, ...rows]
+    }
+
+    // 確保試算表裡有我們需要的兩個分頁，沒有的話自動補上
+    async function ensureTabsExist() {
+      const meta = await sheetsFetch(`${SHEETS_API}/${spreadsheetId.value}?fields=sheets.properties.title`)
+      const titles = (meta.sheets || []).map(s => s.properties.title)
+      const requests = []
+      if (!titles.includes('學生明細')) requests.push({ addSheet: { properties: { title: '學生明細' } } })
+      if (!titles.includes('raw_data')) requests.push({ addSheet: { properties: { title: 'raw_data' } } })
+      if (requests.length) {
+        await sheetsFetch(`${SHEETS_API}/${spreadsheetId.value}:batchUpdate`, {
+          method: 'POST', body: JSON.stringify({ requests })
+        })
+      }
+    }
+
+    async function syncToSheets() {
+      if (!spreadsheetId.value) return
+      sheetStatus.value = 'syncing'
+      sheetMessage.value = ''
+      try {
+        await ensureTabsExist()
+        await sheetsFetch(`${SHEETS_API}/${spreadsheetId.value}/values/${encodeURIComponent('學生明細!A1')}?valueInputOption=RAW`, {
+          method: 'PUT', body: JSON.stringify({ range: '學生明細!A1', values: buildReadableRows() })
+        })
+        await sheetsFetch(`${SHEETS_API}/${spreadsheetId.value}/values/${encodeURIComponent('raw_data!A1')}?valueInputOption=RAW`, {
+          method: 'PUT', body: JSON.stringify({ range: 'raw_data!A1', values: [[JSON.stringify(toCompactPayload())]] })
+        })
+        sheetStatus.value = 'idle'
+        sheetMessage.value = ''
+        lastSyncedAt.value = new Date().toLocaleTimeString('zh-Hant-TW')
+        hasUnsavedChanges.value = false
+      } catch (e) {
+        sheetStatus.value = 'error'
+        sheetMessage.value = '同步失敗：' + e.message
+      }
+    }
+
+    async function loadFromSheets() {
+      if (!spreadsheetId.value) return
+      sheetStatus.value = 'loading'
+      sheetMessage.value = ''
+      try {
+        const data = await sheetsFetch(`${SHEETS_API}/${spreadsheetId.value}/values/${encodeURIComponent('raw_data!A1')}`)
+        const cell = data?.values?.[0]?.[0]
+        if (!cell) {
+          sheetStatus.value = 'idle'
+          sheetMessage.value = '這份試算表裡還沒有資料，按「立即同步」即可建立第一份'
+          return
+        }
+        const parsed = JSON.parse(cell)
+        isApplyingRemoteData = true
+        students.value = fromCompactPayload(parsed)
+        isApplyingRemoteData = false
+        sheetStatus.value = 'idle'
+        sheetMessage.value = ''
+        lastSyncedAt.value = new Date().toLocaleTimeString('zh-Hant-TW')
+        hasUnsavedChanges.value = false
+      } catch (e) {
+        sheetStatus.value = 'error'
+        sheetMessage.value = '載入失敗：' + e.message
+      }
+    }
+
+    function scheduleAutoSync() {
+      if (!isSignedIn.value || !spreadsheetId.value) return
+      clearTimeout(autoSyncTimer)
+      autoSyncTimer = setTimeout(syncToSheets, 8000)
+    }
+
+    watch(students, () => {
+      if (isApplyingRemoteData) return
+      hasUnsavedChanges.value = true
+      scheduleAutoSync()
+    }, { deep: true })
+
+    // ---------- 新增學生彈出視窗 ----------
+    const isModalOpen = ref(false)
+    const initialForm = { name: '', billingType: 'monthly', isPaid: false, rate: 1000, duration: 1, completed: 0, pending: 0, totalPrepaid: 10 }
+    const form = reactive({ ...initialForm })
+
+    function openModal() {
+      Object.assign(form, initialForm)
+      isModalOpen.value = true
+    }
+    function closeModal() {
+      isModalOpen.value = false
+    }
+    function submitForm() {
+      const newStudent = {
+        id: Date.now(),
+        name: form.name.trim(),
+        billingType: form.billingType,
+        isPaid: form.isPaid,
+        rate: form.rate,
+        duration: form.duration,
+        completed: 0,
+        pending: form.billingType === 'monthly' ? form.pending : 0
+      }
+      if (form.billingType === 'prepaid') {
+        newStudent.totalPrepaid = form.totalPrepaid
+        newStudent.remainingPrepaid = form.totalPrepaid
+      }
+      students.value.push(newStudent)
+      closeModal()
+    }
+
+    // ---------- 篩選邏輯：同時支援分類標籤與姓名搜尋 ----------
+    const filteredStudents = computed(() => {
+      return students.value.filter(student => {
+        const matchesFilter = currentFilter.value === 'all' || student.billingType === currentFilter.value
+        const matchesSearch = student.name.toLowerCase().includes(searchQuery.value.trim().toLowerCase())
+        return matchesFilter && matchesSearch
+      })
+    })
+
+    function countByType(type) {
+      return students.value.filter(s => s.billingType === type).length
+    }
+
+    function getBillingTypeName(type) {
+      return { monthly: '月結', prepaid: '多堂預繳', single: '單堂付費' }[type] || type
+    }
+
+    function getPriceLabel(type) {
+      return { monthly: '本月預估學費', prepaid: '預繳總額', single: '累計應收金額' }[type] || '預估金額'
+    }
+
+    function getContextNote(student) {
+      if (student.billingType === 'prepaid') return `共 ${student.totalPrepaid} 堂／剩餘 ${student.remainingPrepaid} 堂`
+      if (student.billingType === 'single') return `隨堂付／當期累計上 ${student.completed} 堂`
+      if (student.billingType === 'monthly') return `本月預計上 ${student.completed + student.pending} 堂`
+      return ''
+    }
+
+    // 每位學生的預估／應收總金額
+    function calculateTotal(student) {
+      if (student.billingType === 'monthly') {
+        return student.rate * (student.completed + student.pending)
+      }
+      if (student.billingType === 'prepaid') {
+        return student.rate * student.totalPrepaid
+      }
+      if (student.billingType === 'single') {
+        return student.rate * student.completed
+      }
+      return 0
+    }
+
+    // 調整已上堂數（連動月結待上堂數／預繳剩餘堂數）
+    function updateLessons(student, delta) {
+      const next = student.completed + delta
+      if (next < 0) return
+
+      if (delta > 0 && student.billingType === 'monthly' && student.pending > 0) {
+        student.pending -= 1
+      }
+      if (delta < 0 && student.billingType === 'monthly') {
+        student.pending += 1
+      }
+      if (student.billingType === 'prepaid') {
+        const nextRemaining = student.remainingPrepaid - delta
+        if (nextRemaining < 0 || nextRemaining > student.totalPrepaid) return
+        student.remainingPrepaid = nextRemaining
+      }
+      student.completed = next
+    }
+
+    function togglePaidStatus(student) {
+      student.isPaid = !student.isPaid
+    }
+
+    function removeStudent(id) {
+      students.value = students.value.filter(s => s.id !== id)
+    }
+
+    // 單堂繳費學生一鍵結清：標記已收並歸零累計堂數
+    function settleSinglePayment(student) {
+      student.isPaid = true
+      student.completed = 0
+    }
+
+    function formatNumber(n) {
+      return Math.round(n || 0).toLocaleString('zh-Hant-TW')
+    }
+
+    // 全自動動態統計資訊
+    const stats = computed(() => {
+      let totalIncome = 0, collectedIncome = 0, uncollectedIncome = 0
+      let completedLessons = 0, pendingLessons = 0, completedHours = 0, pendingHours = 0
+
+      students.value.forEach(student => {
+        const amount = calculateTotal(student)
+        totalIncome += amount
+        if (student.isPaid) { collectedIncome += amount } else { uncollectedIncome += amount }
+
+        completedLessons += student.completed
+        completedHours += (student.completed * student.duration)
+        if (student.billingType === 'monthly') {
+          pendingLessons += student.pending
+          pendingHours += (student.pending * student.duration)
+        }
+      })
+
+      const progressPercent = totalIncome > 0 ? Math.round((collectedIncome / totalIncome) * 100) : 0
+
+      return {
+        totalIncome, collectedIncome, uncollectedIncome,
+        completedLessons, pendingLessons,
+        completedHours: Math.round(completedHours * 10) / 10,
+        pendingHours: Math.round(pendingHours * 10) / 10,
+        progressPercent
+      }
+    })
+
+    // ---------- 匯出 Excel ----------
+    const isExcelReady = ref(typeof XLSX !== 'undefined')
+
+    function exportToExcel() {
+      if (typeof XLSX === 'undefined') {
+        alert('匯出功能尚未載入完成，請稍後再試一次。')
+        return
+      }
+      const rows = students.value.map(s => ({
+        '學生姓名': s.name,
+        '計費方式': getBillingTypeName(s.billingType),
+        '每堂學費': s.rate,
+        '每堂時數(h)': s.duration,
+        '已上堂數': s.completed,
+        '本月/包堂備註': getContextNote(s),
+        [getPriceLabel(s.billingType)]: calculateTotal(s),
+        '收款狀態': s.isPaid ? '已收' : '未收'
+      }))
+
+      const s = stats.value
+      const summaryRows = [
+        { 項目: '本月預估總收入', 數值: s.totalIncome },
+        { 項目: '已收（含預繳）', 數值: s.collectedIncome },
+        { 項目: '未收（月結/單堂）', 數值: s.uncollectedIncome },
+        { 項目: '已上堂數', 數值: s.completedLessons },
+        { 項目: '待上堂數', 數值: s.pendingLessons },
+        { 項目: '已上時數(h)', 數值: s.completedHours },
+        { 項目: '待上時數(h)', 數值: s.pendingHours }
+      ]
+
+      const wb = XLSX.utils.book_new()
+      const ws1 = XLSX.utils.json_to_sheet(rows)
+      const ws2 = XLSX.utils.json_to_sheet(summaryRows)
+      XLSX.utils.book_append_sheet(wb, ws1, '學生明細')
+      XLSX.utils.book_append_sheet(wb, ws2, '本月總覽')
+
+      const today = new Date()
+      const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
+      XLSX.writeFile(wb, `課堂學費明細_${dateStr}.xlsx`)
+    }
+
+    return {
+      students, currentFilter, searchQuery, showDetails,
+      isSignedIn, signInError, spreadsheetId, spreadsheetInput,
+      sheetStatus, sheetMessage, lastSyncedAt, hasUnsavedChanges,
+      signIn, signOut, createSpreadsheet, useExistingSpreadsheet, forgetSpreadsheet,
+      syncToSheets, loadFromSheets,
+      isModalOpen, form, filteredStudents, stats,
+      openModal, closeModal, submitForm,
+      countByType, getBillingTypeName, getPriceLabel, calculateTotal, getContextNote,
+      updateLessons, togglePaidStatus, removeStudent, settleSinglePayment,
+      formatNumber, isExcelReady, exportToExcel
+    }
+  }
+}).mount('#app')
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {
+      // 若目前環境不支援（例如非 HTTPS 網址），略過即可，不影響其他功能
+    });
+  });
+}
+</script>
+</body>
+</html>
